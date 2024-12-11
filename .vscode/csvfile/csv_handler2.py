@@ -39,5 +39,9 @@ def main():
     for row in data:
         print(row)
 
+
+# B=int(input("Enter the required value:")) 
+#c=int(input("Enter the required value:"))
+
 if __name__ == "__main__":
     main()
