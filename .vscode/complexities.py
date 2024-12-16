@@ -76,4 +76,12 @@ while True:
    except:
        ValueError 
 
+def merge_sort(lst):
+    if len(lst)<=1:
+        return lst
+    mid = len(lst)
+    left = merge_sort(lst[:mid])
+    right = merge_sort(lst[mid:])
+    return merge(left,right)
+
        

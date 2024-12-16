@@ -9,12 +9,10 @@ from PIL import Image, ImageDraw, ImageTk
 import time
 import os
 import sys
-import winreg
 import argparse
-import subprocess
+
 class VideoPlayerApp:
-  
- def __init__(self, start_in_tray=False):
+    def __init__(self, start_in_tray=False):
         # Initialize without creating root window if starting in tray
         self.root = None if start_in_tray else tk.Tk()
         
@@ -35,7 +33,7 @@ class VideoPlayerApp:
         if not start_in_tray:
             self.initialize_ui()
 
- def setup_system_tray(self):
+    def setup_system_tray(self):
         # Create System Tray Icon
         icon_image = self.create_tray_icon()
         menu = (
@@ -45,7 +43,7 @@ class VideoPlayerApp:
         )
         self.tray_icon = pystray.Icon("Video Player", icon_image, "Video Player", menu)
 
- def create_tray_icon(self):
+    def create_tray_icon(self):
         # Create a colorful gradient tray icon
         width, height = 64, 64
         image = Image.new('RGB', (width, height))
@@ -61,7 +59,7 @@ class VideoPlayerApp:
 
         return image
 
- def initialize_ui(self):
+    def initialize_ui(self):
         if self.root is None:
             self.root = tk.Tk()
         
@@ -75,7 +73,7 @@ class VideoPlayerApp:
         # Set up close protocol
         self.root.protocol("WM_DELETE_WINDOW", self.minimize_to_tray)
 
-def create_ui_components(self):
+    def create_ui_components(self):
         # Main Frame
         main_frame = tk.Frame(self.root, bg='#2c3e50')
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -118,7 +116,7 @@ def create_ui_components(self):
                                      bg='#34495e')
         self.progress_bar.pack(pady=10)
 
-def load_video(self, icon=None, item=None):
+    def load_video(self, icon=None, item=None):
         # Ensure we have a root window
         if self.root is None:
             self.initialize_ui()
@@ -139,13 +137,13 @@ def load_video(self, icon=None, item=None):
             self.is_paused = False
             self.play_video()
 
-def play_video(self):
+    def play_video(self):
         if self.video_source and not self.is_playing:
             self.is_playing = True
             self.video_thread = threading.Thread(target=self.video_loop)
             self.video_thread.start()
 
-def video_loop(self):
+    def video_loop(self):
         cap = cv2.VideoCapture(self.video_source)
         while self.is_playing:
             if not self.is_paused:
@@ -158,7 +156,7 @@ def video_loop(self):
                 time.sleep(1 / self.frame_rate)
         cap.release()
 
-def update_canvas(self):
+    def update_canvas(self):
      if self.current_frame is not None:
         img = Image.fromarray(self.current_frame)
         img = img.resize((640, 480), Image.LANCZOS)
@@ -166,121 +164,48 @@ def update_canvas(self):
         self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
         self.update_progress()
 
-def update_progress(self):
+    def update_progress(self):
         if self.video_source:
             total_frames = int(cv2.VideoCapture(self.video_source).get(cv2.CAP_PROP_FRAME_COUNT))
             self.progress_var.set((self.current_frame_count / total_frames) * 100)
 
-def pause_video(self):
+    def pause_video(self):
         self.is_paused = not self.is_paused
 
-def stop_video(self):
+    def stop_video(self):
         self.is_playing = False
         if self.video_thread:
             self.video_thread.join()
         self.current_frame_count = 0
         self.progress_var.set(0)
 
-def skip_backward(self):
+    def skip_backward(self):
         self.current_frame_count = max(0, self.current_frame_count - 10)  # Skip back 10 frames
 
-def skip_forward(self):
+    def skip_forward(self):
         self.current_frame_count += 10  # Skip forward 10 frames
 
-def minimize_to_tray(self):
+    def minimize_to_tray(self):
         self.root.withdraw()
         self.tray_icon.run()
 
-def show_window(self, icon=None, item=None):
+    def show_window(self, icon=None, item=None):
         self.root.deiconify()
         if icon:
             icon.stop()
 
-def exit_application(self, icon=None, item=None):
+    def exit_application(self, icon=None, item=None):
         self.stop_video()
         if icon:
             icon.stop()
         sys.exit()
 
-
-
-def create_startup_shortcut(self):
-        """Create a Windows startup shortcut"""
-        try:
-            # Path to the executable
-            exe_path = sys.executable
-            
-            # Startup folder path
-            startup_folder = os.path.join(
-                os.getenv('APPDATA'), 
-                r'Microsoft\Windows\Start Menu\Programs\Startup'
-            )
-            
-            # Create shortcut
-            shortcut_path = os.path.join(startup_folder, 'VideoPlayer.lnk')
-            
-            # Use Windows Script Host to create shortcut
-            powershell_cmd = f'''
-            $WshShell = New-Object -comObject WScript.Shell
-            $Shortcut = $WshShell.CreateShortcut("{shortcut_path}")
-            $Shortcut.TargetPath = "{exe_path}"
-            $Shortcut.Arguments = "--tray"
-            $Shortcut.Save()
-            '''
-            
-            subprocess.run(["powershell", "-Command", powershell_cmd], 
-                           capture_output=True)
-            
-            return True
-        except Exception as e:
-            print(f"Error creating startup shortcut: {e}")
-            return False
-
-def add_to_registry_startup(self):
-        """Add application to Windows Registry startup"""
-        try:
-            # Path to the executable
-            exe_path = f'"{sys.executable}" --tray'
-            
-            # Open Windows Run key
-            key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER, 
-                r"Software\Microsoft\Windows\CurrentVersion\Run", 
-                0, 
-                winreg.KEY_ALL_ACCESS
-            )
-            
-            # Set registry value
-            winreg.SetValueEx(key, "VideoPlayer", 0, winreg.REG_SZ, exe_path)
-            winreg.CloseKey(key)
-            
-            return True
-        except Exception as e:
-            print(f"Error adding to registry startup: {e}")
-            return False
-
-def main():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Advanced Video Player")
     parser.add_argument('--tray', action='store_true', help="Start in system tray")
-    parser.add_argument('--install-startup', action='store_true', help="Install to startup")
     args = parser.parse_args()
 
-    # Check for startup installation
-    if args.install_startup:
-        app = VideoPlayerApp()
-        success_registry = app.add_to_registry_startup()
-        success_shortcut = app.create_startup_shortcut()
-        
-        if success_registry and success_shortcut:
-            messagebox.showinfo("Startup", "Application added to Windows startup successfully!")
-        else:
-            messagebox.showerror("Error", "Could not add to startup completely")
-        sys.exit(0)
-
-    # Normal application launch
     app = VideoPlayerApp(start_in_tray=args.tray)
     if not args.tray:
         app.root.mainloop()
 
-if __name__ == "__main__":
-    main()
