@@ -6,89 +6,155 @@ import threading
 import pystray
 from pystray import MenuItem, Icon
 from PIL import Image, ImageDraw, ImageTk
-import time
 import os
-import sys
-import argparse
-#import new module for smoother operation
+import time
+import argparse 
+from cryptography.fernet import Fernet
 
+# Encryption utilities
+KEY_FILE = "key.key"
+USER_FILE = "user_data.txt"
 
+def generate_key():
+    if not os.path.exists(KEY_FILE):
+        key = Fernet.generate_key()
+        with open(KEY_FILE, "wb") as file:
+            file.write(key)
+
+def load_key():
+    with open(KEY_FILE, "rb") as file:
+        return file.read()
+
+def encrypt_data(data):
+    f = Fernet(load_key())
+    return f.encrypt(data.encode())
+
+def decrypt_data(data):
+    f = Fernet(load_key())
+    return f.decrypt(data).decode()
+
+# Login Window
+class LoginWindow(tk.Toplevel):
+    def __init__(self, master, on_login_success):
+        super().__init__(master)
+        self.on_login_success = on_login_success
+        self.title("Login")
+        self.geometry("300x200")
+        self.configure(bg="#34495e")
+
+        tk.Label(self, text="User  ID:", bg="#34495e", fg="white").pack(pady=5)
+        self.user_entry = tk.Entry(self)
+        self.user_entry.pack(pady=5)
+
+        tk.Label(self, text="Password:", bg="#34495e", fg="white").pack(pady=5)
+        self.pass_entry = tk.Entry(self, show="*")
+        self.pass_entry.pack(pady=5)
+
+        tk.Button(self, text="Login", command=self.login, bg="#2980b9", fg="white").pack(pady=5)
+        tk.Button(self, text="Register", command=self.register, bg="#27ae60", fg="white").pack(pady=5)
+
+    def login(self):
+        user_id = self.user_entry.get()
+        password = self.pass_entry.get()
+
+        if os.path.exists(USER_FILE):
+            with open(USER_FILE, "rb") as file:
+                stored_data = file.read().split(b"\n")
+                for line in stored_data:
+                    if line:
+                        stored_user_id, stored_password = line.split(b"|")
+                        stored_user_id = decrypt_data(stored_user_id)
+                        stored_password = decrypt_data(stored_password)
+
+                        if user_id == stored_user_id and password == stored_password:
+                            messagebox.showinfo("Login", "Login successful!")
+                            self.on_login_success()
+                            self.destroy()
+                            return
+                messagebox.showwarning("Login", "Invalid credentials!")
+        else:
+            messagebox.showwarning("Login", "No registered user found!")
+
+    def register(self):
+        user_id = self.user_entry.get()
+        password = self.pass_entry.get()
+
+        if user_id and password:
+            encrypted_user_id = encrypt_data(user_id)
+            encrypted_password = encrypt_data(password)
+
+            with open(USER_FILE, "ab") as file:  # Append mode
+                file.write(encrypted_user_id + b"|" + encrypted_password + b"\n")
+
+            messagebox.showinfo("Register", "Registration successful!")
+        else:
+            messagebox.showwarning("Register", "Please fill in all fields!")
+
+# Video Player App
 class VideoPlayerApp:
     def __init__(self, start_in_tray=False):
-        # Initialize without creating root window if starting in tray
         self.root = None if start_in_tray else tk.Tk()
-        
-        # Video Player Variables
         self.video_source = None
         self.is_playing = False
         self.is_paused = False
         self.current_frame = None
         self.video_thread = None
-        self.frame_rate = 30  # Default frame rate
-        self.current_frame_count = 0  # Track current frame count
-        
-        # System Tray Setup
+        self.frame_rate = 30
+        self.current_frame_count = 0
+
         self.tray_icon = None
         self.setup_system_tray()
-        
-        # If not starting in tray, create UI
+
         if not start_in_tray:
-            self.initialize_ui()
+            self.show_login()
 
     def setup_system_tray(self):
-        # Create System Tray Icon
         icon_image = self.create_tray_icon()
         menu = (
             MenuItem('Open Player', self.show_window),
             MenuItem('Load Video', self.load_video),
             MenuItem('Exit', self.exit_application)
         )
-        self.tray_icon = pystray.Icon("Video Player", icon_image, "Video Player", menu)
+        self.tray_icon = pystray.Icon ("Video Player", icon_image, "Video Player", menu)
 
     def create_tray_icon(self):
-        # Create a colorful gradient tray icon
         width, height = 64, 64
         image = Image.new('RGB', (width, height))
         draw = ImageDraw.Draw(image)
 
-        # Create a gradient effect
         for i in range(height):
-            color = (255 - int(255 * (i / height)), int(255 * (i / height)), 100)  # Gradient from red to green
+            color = (255 - int(255 * (i / height)), int(255 * (i / height)), 100)
             draw.line([(0, i), (width, i)], fill=color)
 
-        # Add a border
         draw.rectangle([0, 0, width, height], outline="black", width=2)
-
         return image
+
+    def show_login(self):
+        self.login_window = LoginWindow(self.root, self.initialize_ui)
+        self.root.withdraw()
 
     def initialize_ui(self):
         if self.root is None:
             self.root = tk.Tk()
-        
+
+        self.root.deiconify()
         self.root.title("Advanced Video Player")
         self.root.geometry("800x600")
         self.root.configure(bg='#2c3e50')
 
-        # Create UI Components
         self.create_ui_components()
-        
-        # Set up close protocol
         self.root.protocol("WM_DELETE_WINDOW", self.minimize_to_tray)
 
     def create_ui_components(self):
-        # Main Frame
         main_frame = tk.Frame(self.root, bg='#2c3e50')
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Video Canvas
         self.canvas = tk.Canvas(main_frame, width=640, height=480, bg='black')
         self.canvas.pack(pady=10)
 
-        # Control Frame
         control_frame = tk.Frame(main_frame, bg='#2c3e50')
         control_frame.pack(pady=10)
 
-        # Buttons
         btn_style = {
             'bg': '#34495e', 
             'fg': 'white', 
@@ -109,7 +175,6 @@ class VideoPlayerApp:
             btn = tk.Button(control_frame, text=text, command=command, **btn_style)
             btn.pack(side=tk.LEFT, padx=5)
 
-        # Progress Bar
         self.progress_var = tk.DoubleVar()
         self.progress_bar = tk.Scale(main_frame, from_=0, to=100, 
                                      orient=tk.HORIZONTAL, 
@@ -118,21 +183,8 @@ class VideoPlayerApp:
                                      bg='#34495e')
         self.progress_bar.pack(pady=10)
 
-    def load_video(self, icon=None, item=None):
-        # Ensure we have a root window
-        if self.root is None:
-            self.initialize_ui()
-            self.show_window()
-
-        # Close the system tray menu if opened from tray
-        if icon:
-            icon.stop()
-
-        # Open file dialog
-        self.video_source = filedialog.askopenfilename(
-            title="Select Video File", 
-            filetypes=[("Video Files ", "*.mp4;*.avi;*.mov;*.mkv")]
-        )
+    def load_video(self):
+        self.video_source = filedialog.askopenfilename(title="Select Video File", filetypes=[("Video Files", "*.mp4;*.avi;*.mov;*.mkv")])
         if self.video_source:
             self.current_frame_count = 0
             self.is_playing = False
@@ -152,24 +204,15 @@ class VideoPlayerApp:
                 ret, frame = cap.read()
                 if not ret:
                     break
-                self.current_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                self.current_frame_count += 1 
-                self.update_canvas()
+                self.current_frame_count += 1
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = Image.fromarray(frame)
+                img = img.resize((640, 480))
+                self.current_frame = ImageTk.PhotoImage(img)
+                self.canvas.create_image(0, 0, anchor=tk.NW, image=self.current_frame)
+                self.progress_var.set((self.current_frame_count / cap.get(cv2.CAP_PROP_FRAME_COUNT)) * 100)
                 time.sleep(1 / self.frame_rate)
         cap.release()
-
-    def update_canvas(self):
-     if self.current_frame is not None:
-        img = Image.fromarray(self.current_frame)
-        img = img.resize((640, 480), Image.LANCZOS)
-        self.photo = ImageTk.PhotoImage(img)
-        self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
-        self.update_progress()
-
-    def update_progress(self):
-        if self.video_source:
-            total_frames = int(cv2.VideoCapture(self.video_source).get(cv2.CAP_PROP_FRAME_COUNT))
-            self.progress_var.set((self.current_frame_count / total_frames) * 100)
 
     def pause_video(self):
         self.is_paused = not self.is_paused
@@ -179,7 +222,7 @@ class VideoPlayerApp:
         if self.video_thread:
             self.video_thread.join()
         self.current_frame_count = 0
-        self.progress_var.set(0)
+        self.canvas.delete("all")
 
     def skip_backward(self):
         self.current_frame_count = max(0, self.current_frame_count - 10)  # Skip back 10 frames
@@ -189,20 +232,24 @@ class VideoPlayerApp:
 
     def minimize_to_tray(self):
         self.root.withdraw()
+        self.tray_icon.run(self.tray_icon_thread)
+
+    def tray_icon_thread(self):
         self.tray_icon.run()
 
-    def show_window(self, icon=None, item=None):
+    def show_window(self):
+        self.tray_icon.stop()
         self.root.deiconify()
-        if icon:
-            icon.stop()
 
-    def exit_application(self, icon=None, item=None):
-        self.stop_video()
-        if icon:
-            icon.stop()
-        sys.exit()
+    def exit_application(self):
+        self.is_playing = False
+        if self.video_thread:
+            self.video_thread.join()
+        self.tray_icon.stop()
+        self.root.quit()
 
 if __name__ == "__main__":
+    generate_key()
     parser = argparse.ArgumentParser(description="Advanced Video Player")
     parser.add_argument('--tray', action='store_true', help="Start in system tray")
     args = parser.parse_args()
@@ -210,4 +257,3 @@ if __name__ == "__main__":
     app = VideoPlayerApp(start_in_tray=args.tray)
     if not args.tray:
         app.root.mainloop()
-
