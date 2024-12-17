@@ -292,4 +292,4 @@ if __name__ == "__main__":
 
     app = VideoPlayerApp(start_in_tray=args.tray)
     if not args.tray:
-        app.root.mainloop()
+        app.root.mainloop() 
