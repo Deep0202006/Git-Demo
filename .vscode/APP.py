@@ -11,11 +11,59 @@ import time
 import argparse
 import requests
 from cryptography.fernet import Fernet
+from flask import Flask, request, jsonify
+from datetime import datetime
 
 # Encryption utilities
 KEY_FILE = "key.key"
 USER_FILE = "user_data.txt"
+API_URL = "http://127.0.0.1:5000"  # URL for the Flask API
 
+# Flask app for tracking login/logout times
+app = Flask(__name__)
+user_sessions = {}
+
+@app.route('/login', methods=['POST'])  
+def login():
+    data = request.json
+    user_id = data.get('user_id')
+    login_time = datetime.now().isoformat()
+    
+    if user_id not in user_sessions:
+        user_sessions[user_id] = {'login_time': login_time, 'logout_time': None, 'total_time': 0}
+    else:
+        user_sessions[user_id]['login_time'] = login_time
+    
+    return jsonify({"message": "Login time recorded", "data": user_sessions[user_id]}), 200
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    data = request.json
+    user_id = data.get('user_id')
+    logout_time = datetime.now().isoformat()
+    
+    if user_id in user_sessions:
+        user_sessions[user_id]['logout_time'] = logout_time
+        login_time = datetime.fromisoformat(user_sessions[user_id]['login_time'])
+        logout_time_dt = datetime.fromisoformat(logout_time)
+        total_time = (logout_time_dt - login_time).total_seconds()
+        user_sessions[user_id]['total_time'] += total_time
+    
+    return jsonify({"message": "Logout time recorded", "data": user_sessions[user_id]}), 200
+
+@app.route('/sessions', methods=['GET'])
+def get_sessions():
+    return jsonify(user_sessions), 200
+
+def run_flask_app():
+    app.run(port=5000)
+
+# Start Flask app in a separate thread
+flask_thread = threading.Thread(target=run_flask_app)
+flask_thread.daemon = True  # Allow thread to exit when the main program exits
+flask_thread.start()
+
+# Encryption functions
 def generate_key():
     if not os.path.exists(KEY_FILE):
         key = Fernet.generate_key()
@@ -43,14 +91,14 @@ class LoginWindow(tk.Toplevel):
         self.geometry("300x200")
         self.configure(bg="#34495e")
 
-        tk.Label(self, text="User    ID:", bg="#34495e", fg="white").pack(pady=5)
+        tk.Label(self, text="User  ID:", bg="#34495e", fg="white").pack(pady=5)
         self.user_entry = tk.Entry(self)
         self.user_entry.pack(pady=5)
 
         tk.Label(self, text="Password:", bg="#34495e", fg="white").pack(pady=5)
         self.pass_entry = tk.Entry(self, show="*")
         self.pass_entry.pack(pady=5)
-
+        
         tk.Button(self, text="Login", command=self.login, bg="#2980b9", fg="white").pack(pady=5)
         tk.Button(self, text="Register", command=self.register, bg="#27ae60", fg="white").pack(pady=5)
 
@@ -70,6 +118,8 @@ class LoginWindow(tk.Toplevel):
                         if user_id == stored_user_id and password == stored_password:
                             messagebox.showinfo("Login", "Login successful!")
                             self.on_login_success()
+                            # Send login time to the API
+                            requests.post(f"{API_URL}/login", json={"user_id": user_id})
                             self.destroy()
                             return
                 messagebox.showwarning("Login", "Invalid credentials!")
@@ -102,7 +152,7 @@ class VideoPlayerApp:
         self.video_thread = None
         self.frame_rate = 30
         self.current_frame_count = 0
-
+        
         self.tray_icon = None
         self.setup_system_tray()
 
@@ -127,10 +177,12 @@ class VideoPlayerApp:
         menu = (
             MenuItem('Open Player', self.show_window),
             MenuItem('Load Video', self.load_video),
-            MenuItem('Fetch API Data', self.fetch_api_data),  # New menu item
+            MenuItem('View User Sessions', self.view_user_sessions),
             MenuItem('Exit', self.exit_application)
         )
         self.tray_icon = pystray.Icon("Video Player", icon_image, "Video Player", menu)
+        self.tray_icon.tooltip = "Video Player"  # Set the tooltip
+        self.tray_icon.run()  # Run the tray icon immediately
 
     def create_tray_icon(self):
         width, height = 64, 64
@@ -171,9 +223,9 @@ class VideoPlayerApp:
         control_frame.pack(pady=10)
 
         btn_style = {
-            'bg': '#34495e', 
-            'fg': 'white', 
-            'activebackground': '#2980b9', 
+            'bg': '#34495e',
+            'fg': 'white',
+            'activebackground': '#2980b9',
             'font': ('Arial', 10)
         }
 
@@ -183,8 +235,7 @@ class VideoPlayerApp:
             ("Pause", self.pause_video),
             ("Stop", self.stop_video),
             ("Skip Backward", self.skip_backward),
-            ("Skip Forward", self.skip_forward),
-            ("Fetch API Data", self.fetch_api_data)  # New button
+            ("Skip Forward", self.skip_forward)
         ]
 
         for text, command in buttons:
@@ -192,9 +243,9 @@ class VideoPlayerApp:
             btn.pack(side=tk.LEFT, padx=5)
 
         self.progress_var = tk.DoubleVar()
-        self.progress_bar = tk.Scale(main_frame, from_=0, to=100, 
-                                     orient=tk.HORIZONTAL, 
-                                     length=600, 
+        self.progress_bar = tk.Scale(main_frame, from_=0, to=100,
+                                     orient=tk.HORIZONTAL,
+                                     length=600,
                                      variable=self.progress_var,
                                      bg='#34495e')
         self.progress_bar.pack(pady=10)
@@ -230,7 +281,6 @@ class VideoPlayerApp:
                 self.current_frame = ImageTk.PhotoImage(img)
                 self.canvas.create_image(0, 0, anchor=tk.NW, image=self.current_frame)
                 self.progress_var.set((self.current_frame_count / cap.get(cv2.CAP_PROP_FRAME_COUNT)) * 100)
-                time 
                 time.sleep(1 / self.frame_rate)
         cap.release()
 
@@ -242,7 +292,7 @@ class VideoPlayerApp:
         if self.video_thread:
             self.video_thread.join()
         self.current_frame_count = 0
-        self.canvas.delete("all")
+        self.canvas.delete("all")  
 
     def skip_backward(self):
         self.current_frame_count = max(0, self.current_frame_count - 10)  # Skip back 10 frames
@@ -252,10 +302,6 @@ class VideoPlayerApp:
 
     def minimize_to_tray(self):
         self.root.withdraw()
-        self.tray_icon.run(self.tray_icon_thread)
-
-    def tray_icon_thread(self):
-        self.tray_icon.run()
 
     def show_window(self):
         self.tray_icon.stop()
@@ -265,24 +311,29 @@ class VideoPlayerApp:
         self.is_playing = False
         if self.video_thread:
             self.video_thread.join()
+        # Send logout time to the API
+        user_id = self.login_window.user_entry.get()  # Assuming user_id is stored here
+        requests.post(f"{API_URL}/logout", json={"user_id": user_id})
         self.tray_icon.stop()
         self.root.quit()
 
-    def fetch_api_data(self):
-        try:
-            response = requests.get("https://demo1.targetcrm.cloud/modules/Mobile/api.php")
-            response.raise_for_status()  # Raise an error for bad responses
-            data = response.json()  # Assuming the API returns JSON data
-            self.display_api_data(data)  # Call function to display data
-        except requests.exceptions.RequestException as e:
-            messagebox.showerror("API Error", str(e))
-
-    def display_api_data(self, data):
-        # Clear previous data
-        self.api_data_text.delete(1.0, tk.END)
-        
-        # Display new data
-        self.api_data_text.insert(tk.END, str(data))
+    def view_user_sessions(self):
+    # Check if api_data_text is initialized
+     if not hasattr(self, 'api_data_text'):
+        messagebox.showwarning("Warning", "User  sessions are not available yet. Please log in first.")
+        return  # Exit the method if api_data_text is not initialized
+# Make a request to get user sessions
+    response = requests.get(f"{API_URL}/sessions")
+    if response.status_code == 200:
+        sessions = response.json()
+        self.api_data_text.delete(1.0, tk.END)  # Clear previous text
+    for user_id, data in sessions.items():
+        self.api_data_text.insert(tk.END, f"User  ID: {user_id}\n")
+        self.api_data_text.insert(tk.END, f"Login Time: {data['login_time']}\n")
+        self.api_data_text.insert(tk.END, f"Logout Time: {data['logout_time']}\n")
+        self.api_data_text.insert(tk.END, f"Total Time Spent: {data['total_time']} seconds\n\n")
+    else:
+        messagebox.showerror("Error", "Failed to retrieve user sessions.")
 
 if __name__ == "__main__":
     generate_key()
@@ -292,4 +343,5 @@ if __name__ == "__main__":
 
     app = VideoPlayerApp(start_in_tray=args.tray)
     if not args.tray:
-        app.root.mainloop() 
+        app.root.mainloop()
+
