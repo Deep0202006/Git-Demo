@@ -5,7 +5,7 @@ import numpy as np
 import threading
 import pystray
 from pystray import MenuItem, Icon
-from PIL import Image, ImageDraw, ImageTk
+from PIL import Image, ImageDraw, ImageTk 
 import os 
 import time
 import argparse
@@ -374,4 +374,5 @@ if __name__ == "__main__":
     
     app = VideoPlayerApp(start_in_tray=args.tray)
     if not args.tray:
-        app.root.mainloop()
+        app.root.mainloop() 
+    

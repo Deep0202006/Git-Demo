@@ -1,0 +1,1 @@
+start "" "C:/Users/dcp69/AppData/Local/Programs/Python/Python312/python.exe" "C:\Users\dcp69\Desktop\Python proj\.vscode\ss.py"
