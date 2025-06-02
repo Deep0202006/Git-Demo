@@ -1,4 +1,4 @@
-
+<!-- <!DOCTYPE html> -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -31,3 +31,4 @@
     <img src="https://picsum.photos/300/200" alt="Random Image">
 </body>
 </html>
+
